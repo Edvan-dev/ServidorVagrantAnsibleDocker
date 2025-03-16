@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  webproxy:
+    image: edvsl/nginx_asa
+    ports:
+      - "8080:8080"
+    networks:
+      - wordpress
+    depends_on:
+      - webserver
+
+  webserver:
+    image: wordpress:latest
+    volumes:
+      - app:/var/www/html
+    environment:
+      WORDPRESS_DB_HOST: database:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    networks:
+      - wordpress
+    depends_on:
+      - database
+
+  database:
+    image: mysql:5.7
+    volumes:
+      - my:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+    networks:
+      - wordpress
+
+volumes:
+  app:
+  my:
+
+networks:
+  wordpress:

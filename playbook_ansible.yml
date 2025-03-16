@@ -1,0 +1,112 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - name: Alterar o hostname para server.Edvan.Oliveira
+      hostname:
+        name: server.Edvan.Oliveira
+
+    - name: Atualizar cache de pacotes (Debian-based)
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Instalar pacotes necessários no Debian/Ubuntu
+      apt:
+        name:
+          - build-essential
+          - dkms
+          - linux-headers-{{ ansible_kernel }}
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Instalar dependências necessárias
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+        update_cache: yes
+
+    - name: Copiar docker-compose.yml para /vagrant
+      copy:
+        src: docker-compose.yml
+        dest: /vagrant/docker-compose.yml
+        owner: vagrant
+        group: vagrant
+        mode: '0644'
+
+    - name: Adicionar chave GPG do Docker
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Adicionar repositório do Docker
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Remover pacotes conflitantes
+      apt:
+        name:
+          - containerd
+          - containerd.io
+          - docker.io
+          - docker-compose
+        state: absent
+      ignore_errors: yes
+
+    - name: Atualizar repositórios do sistema
+      apt:
+        update_cache: yes
+
+    - name: Instalar Docker e Docker Compose corretamente
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+
+    - name: Adicionar usuário ao grupo Docker
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+      ignore_errors: yes
+
+    - name: Reiniciar serviço Docker
+      systemd:
+        name: docker
+        state: restarted
+
+    - name: Verificar se o Docker está rodando
+      command: systemctl is-active docker
+      register: docker_status
+      ignore_errors: yes
+
+    - name: Instalar Docker Compose via script oficial
+      shell: |
+        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+      args:
+        executable: /bin/bash
+
+    - name: Subir containers com Docker Compose
+      command: docker-compose up -d
+      args:
+        chdir: /vagrant
+      register: compose_result
+      ignore_errors: yes
+
+    - name: Exibir erro do Docker Compose, se houver
+      debug:
+        msg: "{{ compose_result.stderr }}"
+      when: compose_result.failed
+
+    - name: Executar docker-compose
+      command: docker-compose up -d
+      args:
+        chdir: /vagrant
+
